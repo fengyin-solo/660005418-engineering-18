@@ -2,6 +2,10 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import axios from 'axios'
 import type { AnalysisResult, AlertRule } from '@/types'
+
+// 日志接口前缀来自环境配置（frontend/.env 的 VITE_API_BASE_URL），默认走 Vite 代理
+const API_BASE = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/+$/, '')
+
 export const useLogStore = defineStore('log', () => {
   const result = ref<AnalysisResult | null>(null)
   const loading = ref(false)
@@ -15,14 +19,14 @@ export const useLogStore = defineStore('log', () => {
 
   async function generate() {
     loading.value=true
-    try { const {data} = await axios.post('/api/generate',{type:logType.value,count:1000}) ; result.value=data }
+    try { const {data} = await axios.post(`${API_BASE}/generate`,{type:logType.value,count:1000}) ; result.value=data }
     finally { loading.value=false }
   }
 
   async function detect() {
     if (!result.value) return
     loading.value=true
-    try { const {data} = await axios.post('/api/detect',{logs:result.value.logs,rules:rules.value.filter(r=>r.enabled),query:searchQuery.value}) ; result.value=data }
+    try { const {data} = await axios.post(`${API_BASE}/detect`,{logs:result.value.logs,rules:rules.value.filter(r=>r.enabled),query:searchQuery.value}) ; result.value=data }
     finally { loading.value=false }
   }
 

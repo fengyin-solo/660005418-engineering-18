@@ -1,4 +1,4 @@
-import re, math, time, random
+import re, math, time, random, os
 import numpy as np
 from collections import defaultdict, Counter
 from fastapi import FastAPI
@@ -185,3 +185,14 @@ def analyze_logs(logs_data, rules, query):
         "alerts": alerts[:20],
         "totalLogs": n
     }
+
+
+if __name__ == "__main__":
+    # 监听地址与端口由环境变量提供（见 backend/.env.example），与其他环境写法一致
+    import uvicorn
+    uvicorn.run(
+        "app.main:app",
+        host=os.environ.get("BACKEND_HOST", "127.0.0.1"),
+        port=int(os.environ.get("BACKEND_PORT", "8000")),
+        reload=os.environ.get("BACKEND_RELOAD", "1") == "1",
+    )
