@@ -43,6 +43,7 @@ lerna-debug.log*
 !.env.example
 !.env.sample
 !.env.template
+!.env.*.example
 *.pem
 *.key
 *.crt

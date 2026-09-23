@@ -5,8 +5,21 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+from app.config import CORS_ORIGINS, LOG_API_PORT
+
 app = FastAPI(title="Log Anomaly Detector")
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=CORS_ORIGINS,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+@app.get("/health")
+def health():
+    """就绪探针：脚本启动后端、联调冒烟时据此确认日志接口已可用。"""
+    return {"status": "ok", "service": "log-api", "port": LOG_API_PORT}
 
 LOG_TEMPLATES = {
     "nginx": {
@@ -108,11 +121,20 @@ def analyze_logs(logs_data, rules, query):
         chunk = logs[i:i + window_size]
         levels = Counter(l["level"] for l in chunk)
         sources = Counter(l["source"] for l in chunk)
+        keyword_hits = Counter()
+        for rule in rules:
+            if isinstance(rule, dict) and rule.get("type") == "keyword":
+                keyword = str(rule.get("keyword", "")).lower().strip()
+                if keyword:
+                    keyword_hits[keyword] = sum(
+                        1 for l in chunk if keyword in l["raw"].lower()
+                    )
         windows.append({
             "start": i, "end": min(i + window_size, n),
             "count": len(chunk),
             "levels": dict(levels),
-            "sources": dict(sources)
+            "sources": dict(sources),
+            "keywordHits": dict(keyword_hits),
         })
 
     # 3-sigma + IQR anomaly detection
@@ -156,6 +178,16 @@ def analyze_logs(logs_data, rules, query):
                     "severity": "medium", "message": f"窗口{w['start']}日志量{w['count']}超过阈值",
                     "timestamp": time.strftime("%H:%M:%S")
                 })
+            if rule.get("type") == "keyword":
+                keyword = str(rule.get("keyword", "")).lower().strip()
+                hits = w["keywordHits"].get(keyword, 0) if keyword else 0
+                if keyword and hits > rule.get("threshold", 0):
+                    alerts.append({
+                        "id": len(alerts) + 1, "ruleName": rule.get("name", "关键词命中"),
+                        "severity": "high",
+                        "message": f"窗口{w['start']}命中关键词「{keyword}」{hits}次，超过阈值{rule.get('threshold', 0)}",
+                        "timestamp": time.strftime("%H:%M:%S")
+                    })
 
     # Full-text search with TF-IDF
     if query:
